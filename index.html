@@ -80,6 +80,9 @@
   .lb-wrap { max-height: 260px; overflow: auto; margin-top: 6px; }
   .who { font-size: 13px; color: var(--muted); margin-top: 6px; }
   .who b { color: var(--text); }
+  .thanks { margin: 10px 0 4px; padding: 10px 12px; border-radius: 10px; font-size: 14px; line-height: 1.4;
+    background: linear-gradient(135deg, rgba(255,138,31,.18), rgba(62,207,142,.18)); border: 1px solid rgba(255,138,31,.5); color: var(--text); }
+  .thanks b { color: #ffb020; }
   .linkish { background: none; border: 0; padding: 0; color: var(--green); font-size: 13px; font-weight: 600; cursor: pointer; }
   .linkish:hover { background: none; text-decoration: underline; }
   @media (max-width: 560px) {
@@ -110,6 +113,7 @@
     <div class="card">
       <h1><span>Supa</span> Hero</h1>
       <div class="who">Playing as <b id="ready-name"></b> · <button class="linkish" id="change-name">change</button></div>
+      <div class="thanks hidden" id="ready-thanks"></div>
       <p>Press <b>Space</b>, <b>↑</b>, click or tap to fly up. Clear an obstacle or dodge a flying rocket for +1. Don't touch them, the ground or the sky.</p>
       <div class="row">
         <button id="play-btn">Play</button>
@@ -122,6 +126,7 @@
   <div id="screen-over" class="overlay hidden">
     <div class="card">
       <h2>Game over</h2>
+      <div class="thanks hidden" id="over-thanks"></div>
       <div class="big" id="final-score">0</div>
       <div class="who" id="save-status">Saving score…</div>
       <div class="lb-wrap"><table id="over-lb"></table></div>
@@ -224,9 +229,21 @@ $("again-btn").addEventListener("click", () => startGame());
 $("ready-lb-btn").addEventListener("click", () => { show("lb"); loadLeaderboardInto($("lb-table")); });
 $("lb-back").addEventListener("click", () => toReady());
 
+// Special thank-you for Paul, who provided the prize
+const isPaul = () => (player?.name || "").trim().toLowerCase() === "paul";
+const PAUL_THANKS = "🏆 <b>Thank you, Paul,</b> for the prize! Everyone playing Supa Hero is grateful. 🎃";
+function showThanks() {
+  for (const id of ["ready-thanks", "over-thanks"]) {
+    const el = $(id);
+    el.innerHTML = isPaul() ? PAUL_THANKS : "";
+    el.classList.toggle("hidden", !isPaul());
+  }
+}
+
 function toReady() {
   if (!player) { show("register"); setTimeout(() => $("name-input").focus(), 50); return; }
   $("ready-name").textContent = player.name;
+  showThanks();
   state = "ready";
   show("ready");
 }
@@ -308,6 +325,7 @@ function startGame() {
   resetWorld();
   hideAll();
   state = "playing";
+  if (isPaul()) popups.push({ x: W / 2, y: H * 0.32, t: 0, text: "THANKS FOR THE PRIZE, PAUL!", big: true });
   flap();
 }
 
@@ -451,6 +469,7 @@ async function gameOver() {
   const status = $("save-status");
   status.style.color = "";
   status.textContent = "Saving score…";
+  showThanks();
   show("over");
   const table = $("over-lb");
   table.innerHTML = "";
