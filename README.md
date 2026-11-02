@@ -1,5 +1,7 @@
 # Supa Hero
 
+**Play it:** https://newsteven-dev.github.io/supa-hero/
+
 A side-scrolling flying game: the Supabase bolt flies as a caped superhero and clears rival obstacles
 (Legacy DB, Vendor Lock-in, Slow Queries, Cold Starts...). One point per obstacle cleared.
 
