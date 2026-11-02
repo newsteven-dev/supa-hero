@@ -3,7 +3,9 @@
 **Play it:** https://newsteven-dev.github.io/supa-hero/
 
 A side-scrolling flying game: the Supabase bolt flies as a caped superhero and clears rival obstacles
-(Legacy DB, Vendor Lock-in, Slow Queries, Cold Starts...). One point per obstacle cleared.
+(Legacy DB, Vendor Lock-in, Slow Queries, Cold Starts...) while Firebase, Appwrite and PocketBase
+rockets and burning stones fly across a Halloween sky. One point per obstacle cleared or rocket dodged.
+The game speeds up every 3 points, and the first two obstacles are deliberately tough.
 
 - `index.html`: the whole game (canvas + supabase-js from the jsDelivr CDN). Already configured with
   your project URL and publishable key.

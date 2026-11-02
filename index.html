@@ -4,25 +4,25 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <title>Supa Hero</title>
-<meta name="description" content="Supa Hero is a Halloween flying game where the Supabase bolt soars as a caped superhero past rival obstacles like Legacy DB, Vendor Lock-in and Slow Queries. How to play: press Space, the Up arrow, click or tap to fly up; clear each obstacle for 1 point; it speeds up at 3 points; touching an obstacle, the ground or the sky ends the run. Register your name to save your score and climb the top 30 leaderboard." />
+<meta name="description" content="Supa Hero is a Halloween flying game where the Supabase bolt soars as a caped superhero past rival obstacles like Legacy DB and Vendor Lock-in, while Firebase, Appwrite and PocketBase rockets and stones fly across the sky. How to play: press Space, the Up arrow, click or tap to fly up; clear each obstacle or dodge each rocket for 1 point; it speeds up every 3 points; touching an obstacle, the ground or the sky ends the run. Register your name to save your score and climb the top 30 leaderboard." />
 <meta name="keywords" content="Supa Hero, Supabase, game, flying game, Halloween, leaderboard" />
 <meta name="theme-color" content="#2a0f3d" />
 <link rel="canonical" href="https://newsteven-dev.github.io/supa-hero/" />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Supa Hero" />
 <meta property="og:title" content="Supa Hero: fly past the rivals" />
-<meta property="og:description" content="Fly the Supabase bolt through a Halloween night and smash past rivals. Space, Up or tap to fly; 1 point per obstacle; faster from 3 points. Save your score to the top 30 leaderboard." />
+<meta property="og:description" content="Fly the Supabase bolt through a Halloween night and dodge Firebase, Appwrite and PocketBase rockets. Space, Up or tap to fly; 1 point per obstacle; faster every 3 points. Save your score to the top 30 leaderboard." />
 <meta property="og:url" content="https://newsteven-dev.github.io/supa-hero/" />
 <meta name="twitter:card" content="summary" />
 <meta name="twitter:title" content="Supa Hero: fly past the rivals" />
-<meta name="twitter:description" content="Fly the Supabase bolt through a Halloween night and smash past rivals. Space, Up or tap to fly; 1 point per obstacle; faster from 3 points. Save your score to the top 30 leaderboard." />
+<meta name="twitter:description" content="Fly the Supabase bolt through a Halloween night and dodge Firebase, Appwrite and PocketBase rockets. Space, Up or tap to fly; 1 point per obstacle; faster every 3 points. Save your score to the top 30 leaderboard." />
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "VideoGame",
   "name": "Supa Hero",
   "url": "https://newsteven-dev.github.io/supa-hero/",
-  "description": "A Halloween side-scrolling flying game where the Supabase bolt flies as a caped superhero past rival obstacles. How to play: press Space, the Up arrow, click or tap to fly up. Clear each obstacle for 1 point; the game speeds up once you reach 3 points. Touching an obstacle, the ground or the top of the sky ends the run. Register a name to save your score to the top 30 leaderboard.",
+  "description": "A Halloween side-scrolling flying game where the Supabase bolt flies as a caped superhero past rival obstacles. How to play: press Space, the Up arrow, click or tap to fly up. Clear each obstacle or dodge each Firebase, Appwrite or PocketBase rocket for 1 point; the game speeds up every 3 points, and even the first 2 points are tough. Touching an obstacle, the ground or the top of the sky ends the run. Register a name to save your score to the top 30 leaderboard.",
   "genre": ["Arcade", "Casual"],
   "gamePlatform": "Web browser",
   "playMode": "SinglePlayer",
@@ -110,7 +110,7 @@
     <div class="card">
       <h1><span>Supa</span> Hero</h1>
       <div class="who">Playing as <b id="ready-name"></b> · <button class="linkish" id="change-name">change</button></div>
-      <p>Press <b>Space</b>, <b>↑</b>, click or tap to fly up. Clear an obstacle for +1. Don't touch them, the ground or the sky.</p>
+      <p>Press <b>Space</b>, <b>↑</b>, click or tap to fly up. Clear an obstacle or dodge a flying rocket for +1. Don't touch them, the ground or the sky.</p>
       <div class="row">
         <button id="play-btn">Play</button>
         <button class="secondary" id="ready-lb-btn">Top 30</button>
@@ -251,10 +251,43 @@ const RIVALS = [
 let state = "menu"; // menu | ready | playing | dying | over
 let hero, obstacles, particles, popups, score, speed, spawnTimer, time, shake, stars, clouds;
 
+// Difficulty tuning
+const BASE_SPEED = 280, SPEED_STEP = 80, MAX_SPEED = 760; // speed steps up every 3 points
+const CLIMB_RATE = 210; // roughly how fast the hero can climb (px/s) when flapping well
+function tierSpeed(sc) { return Math.min(MAX_SPEED, BASE_SPEED + Math.floor(sc / 3) * SPEED_STEP); }
+function spacingFor(sp) { return 300 + (sp - BASE_SPEED) * 0.55; } // px between obstacles
+let spawned = 0, lastGapMid = H * 0.42;
+
+// Flying rivals: rockets and burning stones that cross the sky (labels only, no logos)
+const FLYERS = [
+  { label: "Firebase", kind: "rocket", body: "#ffb020", trim: "#e5532d" },
+  { label: "Appwrite", kind: "rocket", body: "#fd366e", trim: "#8f1a3f" },
+  { label: "PocketBase", kind: "stone", body: "#b9b6c8", trim: "#5d5a6e" },
+  { label: "Firebase", kind: "stone", body: "#d8742a", trim: "#7a3410" },
+  { label: "Appwrite", kind: "stone", body: "#c74a76", trim: "#5e1d36" },
+  { label: "PocketBase", kind: "rocket", body: "#e9e7f2", trim: "#4b4860" },
+];
+let flyers = [], flyerTimer = 0;
+const FLYER_R = 15, FLYER_START = 1; // they join once you have 1 point
+
+function trySpawnFlyer() {
+  const vx = speed + 170 + Math.random() * 90;
+  const startX = W + 70;
+  const t = 0.75 + (startX - hero.x) / vx; // warning time + flight time until it reaches the hero
+  // never stack a flyer on top of a pillar the hero will be squeezing through: that would be unfair
+  const near = (ox) => ox < hero.x + 70 && ox + 78 > hero.x - 70;
+  const blocked = obstacles.some((o) => near(o.x - speed * t)) || (spawnTimer < t && near(W + 40 - speed * (t - spawnTimer)));
+  if (blocked) return false;
+  const y = Math.max(50, Math.min(GROUND - 40, hero.y + (Math.random() * 2 - 1) * 60)); // aimed near the hero
+  const f = FLYERS[Math.floor(Math.random() * FLYERS.length)];
+  flyers.push({ x: startX, y, vx, f, warn: 0.75, passed: false, spin: Math.random() * 6 });
+  return true;
+}
+
 function resetWorld() {
   hero = { x: 200, y: H * 0.42, vy: 0, r: 22, rot: 0, flap: 0 };
-  obstacles = []; particles = []; popups = [];
-  score = 0; speed = 230; spawnTimer = 0.6; time = 0; shake = 0;
+  obstacles = []; particles = []; popups = []; flyers = []; flyerTimer = 2.2;
+  score = 0; speed = BASE_SPEED; spawnTimer = 0; time = 0; shake = 0; spawned = 0; lastGapMid = H * 0.42;
 }
 function initScenery() {
   stars = Array.from({ length: 70 }, () => ({ x: Math.random() * W, y: Math.random() * (GROUND - 40), s: Math.random() * 1.6 + 0.4, p: Math.random() * 6 }));
@@ -280,17 +313,35 @@ function startGame() {
 
 function flap() {
   if (state !== "playing") return;
-  hero.vy = -420;
+  hero.vy = -440;
   hero.flap = 1;
   for (let i = 0; i < 5; i++) particles.push({ x: hero.x - 18, y: hero.y + 10, vx: -80 - Math.random() * 80, vy: 40 + Math.random() * 60, life: 0.4, max: 0.4, c: "#3ecf8e", s: 3 });
 }
 
-function spawnObstacle() {
-  const gap = Math.max(150, 215 - score * 2.2);
-  const margin = 60;
-  const gapY = margin + Math.random() * (GROUND - margin * 2 - gap) ;
+
+function spawnObstacle(x = W + 40) {
+  // The first two obstacles are the nastiest: tight gaps and a forced swing between them.
+  const gap = spawned < 2 ? 132 : Math.max(128, 160 - score * 1.2);
+  const margin = 50;
+  const minMid = margin + gap / 2, maxMid = GROUND - margin - gap / 2;
+  const travelTime = spacingFor(speed) / speed;
+  const maxUp = CLIMB_RATE * travelTime * 0.85, maxDown = maxUp * 1.6;
+  let mid;
+  if (spawned === 0) {
+    // first one sits far from where the hero starts
+    mid = Math.random() < 0.5 ? minMid + Math.random() * 30 : maxMid - Math.random() * 30;
+  } else if (spawned === 1) {
+    // second one forces the biggest swing the hero can just about make
+    const goUp = lastGapMid > (minMid + maxMid) / 2;
+    mid = goUp ? lastGapMid - maxUp * (0.85 + Math.random() * 0.15) : lastGapMid + maxDown * (0.7 + Math.random() * 0.3);
+  } else {
+    mid = lastGapMid + (Math.random() * 2 - 1) * (Math.random() < 0.5 ? maxUp : maxDown);
+  }
+  mid = Math.max(minMid, Math.min(maxMid, mid));
+  if (spawned === 0 && Math.abs(mid - hero.y) < 120) mid = hero.y < (minMid + maxMid) / 2 ? maxMid : minMid;
+  lastGapMid = mid; spawned++;
   const rival = RIVALS[Math.floor(Math.random() * RIVALS.length)];
-  obstacles.push({ x: W + 40, w: 78, gapY, gap, rival, passed: false, smash: 0 });
+  obstacles.push({ x, w: 78, gapY: mid - gap / 2, gap, rival, passed: false, smash: 0 });
 }
 
 function burst(x, y, color, n = 18) {
@@ -312,7 +363,7 @@ function update(dt) {
   }
 
   if (state === "playing" || state === "dying") {
-    hero.vy += 1250 * dt;
+    hero.vy += 1400 * dt;
     hero.vy = Math.min(hero.vy, 700);
     hero.y += hero.vy * dt;
     hero.rot = Math.max(-0.5, Math.min(1.2, hero.vy / 600));
@@ -321,26 +372,50 @@ function update(dt) {
 
   if (state === "playing") {
     // Speeds up sharply once the hero reaches 3 points, then keeps ramping
-    speed = score < 3 ? 230 : 320 + Math.min((score - 3) * 9, 260);
+    speed = tierSpeed(score);
     spawnTimer -= dt;
-    if (spawnTimer <= 0) { spawnObstacle(); spawnTimer = Math.max(1.05, 1.6 - score * 0.012) * (230 / speed) * 1.25; }
+    if (spawnTimer <= 0) {
+      if (spawned === 0) spawnObstacle(W - 230); // first rival shows up almost immediately
+      else spawnObstacle();
+      const lastX = obstacles[obstacles.length - 1].x;
+      spawnTimer = (spacingFor(speed) - (W + 40 - lastX)) / speed;
+    }
 
     for (const o of obstacles) {
       o.x -= speed * dt;
       if (!o.passed && o.x + o.w < hero.x - hero.r) {
         o.passed = true; o.smash = 1; score++;
         popups.push({ x: o.x + o.w / 2, y: o.gapY + o.gap / 2, t: 0, text: "+1 POW!" });
-        if (score === 3) { popups.push({ x: W / 2, y: H * 0.3, t: 0, text: "SPEED UP!", big: true }); shake = 6; }
+        if (score % 3 === 0 && tierSpeed(score) > tierSpeed(score - 1)) { popups.push({ x: W / 2, y: H * 0.3, t: 0, text: "SPEED UP!", big: true }); shake = 6; }
         burst(o.x + o.w / 2, o.gapY, o.rival.color, 12);
         burst(o.x + o.w / 2, o.gapY + o.gap, o.rival.color, 12);
       }
       if (hits(o)) return die();
     }
     obstacles = obstacles.filter((o) => o.x + o.w > -20);
+
+    if (score >= FLYER_START) {
+      flyerTimer -= dt;
+      if (flyerTimer <= 0) flyerTimer = trySpawnFlyer() ? Math.max(1.6, 4.2 - score * 0.08) + Math.random() * 1.5 : 0.3;
+    }
+    for (const fl of flyers) {
+      if (fl.warn > 0) { fl.warn -= dt; continue; }
+      fl.x -= fl.vx * dt; fl.spin += dt * 4;
+      if (Math.random() < 0.6) particles.push({ x: fl.x + 26, y: fl.y + (Math.random() - 0.5) * 8, vx: 60 + Math.random() * 60, vy: (Math.random() - 0.5) * 40, life: 0.35, max: 0.35, c: Math.random() < 0.5 ? "#ffb020" : "#ff5a1f", s: 3 + Math.random() * 3 });
+      if (!fl.passed && fl.x + FLYER_R < hero.x - hero.r) {
+        fl.passed = true; score++;
+        popups.push({ x: hero.x + 40, y: fl.y, t: 0, text: "+1 DODGED " + fl.f.label.toUpperCase() + "!" });
+        if (score % 3 === 0) { popups.push({ x: W / 2, y: H * 0.3, t: 0, text: "SPEED UP!", big: true }); shake = 6; }
+      }
+      const r = hero.r - 4 + FLYER_R - 3;
+      if ((fl.x - hero.x) ** 2 + (fl.y - hero.y) ** 2 < r * r) { burst(fl.x, fl.y, fl.f.body, 20); return die(); }
+    }
+    flyers = flyers.filter((fl) => fl.x > -80);
     if (hero.y + hero.r > GROUND || hero.y - hero.r < 0) return die();
   }
 
   if (state === "dying") {
+    for (const fl of flyers) if (fl.warn <= 0) fl.x -= fl.vx * 0.3 * dt;
     for (const o of obstacles) o.x -= speed * 0.15 * dt;
     if (hero.y - hero.r > H) { state = "over"; gameOver(); }
   }
@@ -414,6 +489,7 @@ function draw() {
 
   // obstacles
   for (const o of obstacles) drawObstacle(o);
+  for (const fl of flyers) drawFlyer(fl);
 
   // ground
   ctx.fillStyle = "#120a12"; ctx.fillRect(-20, GROUND, W + 40, H - GROUND + 20);
@@ -518,6 +594,51 @@ function drawPumpkins() {
     ctx.beginPath(); ctx.moveTo(-10, 3); ctx.lineTo(-5, 7); ctx.lineTo(0, 4); ctx.lineTo(5, 7); ctx.lineTo(10, 3); ctx.lineTo(0, 9); ctx.closePath(); ctx.fill();
     ctx.restore();
   }
+}
+
+function drawFlyer(fl) {
+  const { f } = fl;
+  if (fl.warn > 0) {
+    // warning marker on the right edge
+    const a = 0.5 + 0.5 * Math.sin(time * 30);
+    ctx.globalAlpha = a; ctx.fillStyle = "#ff3b3b";
+    ctx.beginPath(); ctx.moveTo(W - 14, fl.y - 16); ctx.lineTo(W - 40, fl.y); ctx.lineTo(W - 14, fl.y + 16); ctx.closePath(); ctx.fill();
+    ctx.font = "800 12px system-ui, sans-serif"; ctx.textAlign = "right"; ctx.fillText(f.label.toUpperCase(), W - 46, fl.y + 4);
+    ctx.globalAlpha = 1; return;
+  }
+  ctx.save(); ctx.translate(fl.x, fl.y);
+  if (f.kind === "rocket") {
+    // flame
+    const fl1 = 14 + Math.sin(time * 50) * 5;
+    ctx.fillStyle = "#ffcf3a"; ctx.beginPath(); ctx.moveTo(26, -6); ctx.lineTo(26 + fl1 + 8, 0); ctx.lineTo(26, 6); ctx.fill();
+    ctx.fillStyle = "#ff5a1f"; ctx.beginPath(); ctx.moveTo(26, -4); ctx.lineTo(26 + fl1, 0); ctx.lineTo(26, 4); ctx.fill();
+    // fins
+    ctx.fillStyle = f.trim;
+    ctx.beginPath(); ctx.moveTo(14, -9); ctx.lineTo(28, -20); ctx.lineTo(26, -9); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(14, 9); ctx.lineTo(28, 20); ctx.lineTo(26, 9); ctx.fill();
+    // body + nose (pointing left, toward the hero)
+    ctx.fillStyle = f.body; roundRect(-14, -10, 42, 20, 8); ctx.fill();
+    ctx.fillStyle = f.trim; ctx.beginPath(); ctx.moveTo(-14, -10); ctx.quadraticCurveTo(-34, 0, -14, 10); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#cfe8ff"; ctx.beginPath(); ctx.arc(-4, 0, 4.5, 0, 7); ctx.fill();
+    ctx.strokeStyle = f.trim; ctx.lineWidth = 2; ctx.stroke();
+  } else {
+    // burning stone
+    ctx.fillStyle = "rgba(255,120,30,.35)"; ctx.beginPath(); ctx.ellipse(18, 0, 26, 12, 0, 0, 7); ctx.fill();
+    ctx.rotate(fl.spin);
+    ctx.fillStyle = f.body; ctx.beginPath();
+    const pts = 9;
+    for (let i = 0; i < pts; i++) { const a = (i / pts) * Math.PI * 2, rr = 16 + ((i * 7) % 5) - 2; ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = f.trim;
+    ctx.beginPath(); ctx.arc(-5, -4, 4, 0, 7); ctx.arc(6, 5, 3, 0, 7); ctx.fill();
+    ctx.rotate(-fl.spin);
+  }
+  // name tag
+  ctx.font = "800 12px system-ui, sans-serif"; ctx.textAlign = "center";
+  const tw = ctx.measureText(f.label).width + 10;
+  ctx.fillStyle = "rgba(10,4,16,.75)"; roundRect(-tw / 2 + 4, -36, tw, 17, 5); ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.fillText(f.label, 4, -23);
+  ctx.restore();
 }
 
 function roundRect(x, y, w, h, r) {
