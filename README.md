@@ -16,7 +16,7 @@ Open `index.html` in a browser, or host it on any static host (Vercel, Netlify, 
 For local testing: `npx serve .` or `python3 -m http.server`.
 
 ## Controls
-Space / ↑ / W / click / tap to fly up. Enter or Space restarts after game over.
+Space / ↑ / W / click / tap to fly up. Enter or Space restarts after game over. M or the speaker button mutes the music and sound.
 
 ## How data flows
 1. First visit: player registers a name -> row in `game_players` (names are unique, case-insensitive).
